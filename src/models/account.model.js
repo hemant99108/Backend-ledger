@@ -1,4 +1,4 @@
-
+const ledgerModel=require('./ledger.model');
 
 const mongoose=require('mongoose');
 
@@ -29,6 +29,51 @@ const accountSchema=new mongoose.Schema({
 
 //compound indexing for also we can search based on status of the accounts 
 accountSchema.index({user:1,status:1}); 
+
+
+accountSchema.methods.getBalance=async function(){
+
+    const balanceData=await ledgerModel.aggregate([
+        {$match : {account:this._id} },
+        {
+            $group:{
+                _id:null,
+                totalDebit:{
+                    $sum:{
+                        $cond:[
+                            {$eq:["$type","DEBIT"]},
+                            "$amount",
+                            0
+                        ]
+                    }
+                },
+                totalCredit:{
+                    $sum:{
+                        $cond:[
+                            { $eq:["$type","CREDIT"]},
+                            "$amount",
+                            0
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            $project:{
+                _id:0,
+                balance:{$subtract:["$totalCredit","$totalDebit"]}   
+            }
+        }
+    ])
+    //if account is new then pipeline will return an empty array 
+
+    if(balanceData.length===0){
+        return 0;
+    }
+
+    return balanceData[0].balance;
+    
+}
 
 
 const accountModel=mongoose.model("account",accountSchema);
